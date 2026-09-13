@@ -1,0 +1,86 @@
+/* global supabase */
+const config = window.SUPABASE_CONFIG || {};
+const configured = config.url && config.anonKey && !config.url.includes("IL-TUO") && !config.anonKey.includes("LA-TUA");
+const db = configured ? supabase.createClient(config.url, config.anonKey) : null;
+const $ = selector => document.querySelector(selector);
+let books = [], offers = [], realtimeChannel = null;
+
+function escapeHtml(value="") { return String(value).replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[c]); }
+function money(value){return `€ ${Number(value).toFixed(2).replace(".",",")}`;}
+function formatDate(value){return new Intl.DateTimeFormat("it-IT",{dateStyle:"short",timeStyle:"short"}).format(new Date(value));}
+function toast(message){const el=$("#admin-toast");el.textContent=message;el.classList.remove("hidden");setTimeout(()=>el.classList.add("hidden"),3500);}
+function showError(selector,message){const el=$(selector);el.textContent=message;el.classList.remove("hidden");}
+
+async function handleSession(session){
+  const email=session?.user?.email?.toLowerCase();
+  const owner=(config.ownerEmail||"").toLowerCase();
+  if(!session){$("#login-view").classList.remove("hidden");$("#admin-view").classList.add("hidden");return;}
+  if(!owner || owner.includes("LA-TUA") || email!==owner){await db.auth.signOut();showError("#login-error","Questo account non è autorizzato come proprietario.");return;}
+  $("#login-view").classList.add("hidden");$("#admin-view").classList.remove("hidden");$("#admin-email").textContent=email;
+  await loadAll(); subscribeRealtime();
+}
+
+async function loadAll(){
+  const [booksResult,offersResult]=await Promise.all([
+    db.from("Libri").select("*").order("data_inserimento",{ascending:false}),
+    db.from("Offerte_Scambi").select("*").order("data_inserimento",{ascending:false})
+  ]);
+  if(booksResult.error) return toast(`Errore inventario: ${booksResult.error.message}`);
+  if(offersResult.error) return toast(`Errore offerte: ${offersResult.error.message}`);
+  books=booksResult.data||[];offers=offersResult.data||[];renderInventory();renderOffers();renderStats();
+}
+
+function renderStats(){
+  $("#stat-books").textContent=books.length;
+  $("#stat-available").textContent=books.filter(book=>book.disponibile).length;
+  $("#stat-offers").textContent=offers.filter(offer=>offer.stato==="In attesa").length;
+}
+
+function renderInventory(){
+  $("#inventory-empty").classList.toggle("hidden",books.length>0);
+  $("#inventory-list").innerHTML=books.map(book=>`
+    <article class="grid gap-4 p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:p-6">
+      <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><h3 class="font-semibold">${escapeHtml(book.titolo)}</h3><span class="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-muted">${escapeHtml(book.materia)}</span></div><p class="mt-1 text-sm text-muted">${escapeHtml(book.editore_edizione)} · ISBN ${escapeHtml(book.isbn)}</p><p class="mt-2 text-sm"><strong>${money(book.prezzo_richiesto)}</strong><span class="mx-2 text-gray-300">|</span>${escapeHtml(book.condizioni)}</p></div>
+      <div class="flex items-center gap-3">
+        <label class="flex cursor-pointer items-center gap-2 text-xs font-medium"><span>${book.disponibile?"Disponibile":"Venduto"}</span><input class="availability-toggle peer sr-only" type="checkbox" data-id="${book.id}" ${book.disponibile?"checked":""}><span class="relative h-6 w-11 rounded-full bg-gray-300 transition peer-checked:bg-emerald-500 after:absolute after:left-1 after:top-1 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-5"></span></label>
+        <button class="delete-book rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50" data-id="${book.id}" data-title="${escapeHtml(book.titolo)}">Elimina</button>
+      </div>
+    </article>`).join("");
+  document.querySelectorAll(".availability-toggle").forEach(input=>input.addEventListener("change",()=>setAvailability(input.dataset.id,input.checked)));
+  document.querySelectorAll(".delete-book").forEach(button=>button.addEventListener("click",()=>deleteBook(button.dataset.id,button.dataset.title)));
+}
+
+function renderOffers(){
+  $("#offers-empty").classList.toggle("hidden",offers.length>0);
+  const bookMap=new Map(books.map(book=>[book.id,book]));
+  $("#offers-list").innerHTML=offers.map(offer=>{const book=bookMap.get(offer.libro_id);const pending=offer.stato==="In attesa";return `
+    <article class="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1fr_1fr_auto] lg:items-center">
+      <div><div class="flex flex-wrap items-center gap-2"><h3 class="font-semibold">${escapeHtml(book?.titolo||"Libro eliminato")}</h3><span class="rounded-full px-2 py-0.5 text-[11px] font-semibold ${offer.stato==="Accettata"?"bg-emerald-50 text-emerald-700":offer.stato==="Rifiutata"?"bg-red-50 text-red-600":"bg-amber-50 text-amber-700"}">${escapeHtml(offer.stato)}</span></div><p class="mt-2 text-sm text-muted">${escapeHtml(offer.nome_acquirente)} · <a class="text-accent hover:underline" href="${String(offer.email_o_telefono).includes("@")?`mailto:${escapeHtml(offer.email_o_telefono)}`:`tel:${escapeHtml(offer.email_o_telefono)}`}">${escapeHtml(offer.email_o_telefono)}</a></p><p class="mt-1 text-xs text-gray-400">${formatDate(offer.data_inserimento)}</p></div>
+      <div class="text-sm"><p><span class="text-muted">Offerta:</span> <strong>${money(offer.prezzo_offerto)}</strong></p><p class="mt-1"><span class="text-muted">Scambio:</span> ${escapeHtml(offer.luogo_proposto)}</p>${offer.messaggio?`<p class="mt-2 text-xs italic text-muted">“${escapeHtml(offer.messaggio)}”</p>`:""}</div>
+      <div class="flex gap-2">${pending?`<button class="offer-action rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700" data-id="${offer.id}" data-status="Accettata">Accetta</button><button class="offer-action rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold hover:bg-soft" data-id="${offer.id}" data-status="Rifiutata">Rifiuta</button>`:"<span class='text-xs text-muted'>Gestita</span>"}</div>
+    </article>`}).join("");
+  document.querySelectorAll(".offer-action").forEach(button=>button.addEventListener("click",()=>manageOffer(button.dataset.id,button.dataset.status)));
+}
+
+async function setAvailability(id,available){const {error}=await db.from("Libri").update({disponibile:available}).eq("id",id);if(error){toast(error.message);await loadAll();}else toast(available?"Libro segnato disponibile.":"Libro segnato venduto.");}
+async function deleteBook(id,title){if(!confirm(`Eliminare “${title}”? Verranno eliminate anche le offerte collegate.`))return;const {error}=await db.from("Libri").delete().eq("id",id);if(error)toast(error.message);else toast("Libro eliminato.");}
+async function manageOffer(id,status){const {error}=await db.rpc("gestisci_offerta",{p_offerta_id:id,p_stato:status});if(error)toast(error.message);else toast(status==="Accettata"?"Offerta accettata e libro segnato venduto.":"Offerta rifiutata.");}
+
+$("#login-form").addEventListener("submit",async event=>{
+  event.preventDefault();const button=$("#login-button"),errorBox=$("#login-error");errorBox.classList.add("hidden");
+  if(!db)return showError("#login-error","Configura prima Supabase in supabase-config.js.");
+  const values=new FormData(event.currentTarget);button.disabled=true;button.textContent="Accesso…";
+  const {error}=await db.auth.signInWithPassword({email:$("#login-email").value.trim(),password:String(values.get("password"))});
+  if(error)showError("#login-error","Email o password non corrette.");button.disabled=false;button.textContent="Accedi";
+});
+$("#logout-button").addEventListener("click",async()=>{if(realtimeChannel)await db.removeChannel(realtimeChannel);await db.auth.signOut();});
+$("#book-form").addEventListener("submit",async event=>{
+  event.preventDefault();const bookForm=event.currentTarget,button=$("#add-book-button"),errorBox=$("#book-error"),values=new FormData(bookForm);button.disabled=true;errorBox.classList.add("hidden");
+  const payload={isbn:String(values.get("isbn")).trim(),titolo:String(values.get("titolo")).trim(),editore_edizione:String(values.get("editore_edizione")).trim(),materia:String(values.get("materia")).trim(),prezzo_richiesto:Number(values.get("prezzo_richiesto")),condizioni:values.get("condizioni"),disponibile:true};
+  const {error}=await db.from("Libri").insert(payload);if(error)showError("#book-error",error.message);else{bookForm.reset();toast("Libro aggiunto.");}button.disabled=false;
+});
+
+function subscribeRealtime(){if(realtimeChannel)return;realtimeChannel=db.channel("admin-live").on("postgres_changes",{event:"*",schema:"public",table:"Libri"},loadAll).on("postgres_changes",{event:"*",schema:"public",table:"Offerte_Scambi"},loadAll).subscribe();}
+
+if(!configured)showError("#login-error","Inserisci URL, Anon Key ed email proprietario in supabase-config.js.");
+else {$("#login-email").value=config.ownerEmail&&!config.ownerEmail.includes("LA-TUA")?config.ownerEmail:"";db.auth.onAuthStateChange((_event,session)=>setTimeout(()=>handleSession(session),0));db.auth.getSession().then(({data})=>handleSession(data.session));}

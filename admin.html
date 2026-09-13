@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Area amministratore — Seconda</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{accent:'#2563eb',ink:'#111827',muted:'#6b7280',soft:'#f5f7fa'},fontFamily:{sans:['DM Sans','sans-serif']}}}};</script>
+</head>
+<body class="min-h-screen bg-soft font-sans text-ink antialiased">
+  <section id="login-view" class="grid min-h-screen place-items-center px-5 py-10">
+    <div class="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-7 shadow-sm">
+      <a href="index.html" class="text-lg font-bold tracking-tight">seconda<span class="text-accent">.</span></a>
+      <h1 class="mt-10 text-2xl font-bold tracking-tight">Area amministratore</h1>
+      <p class="mt-2 text-sm leading-6 text-muted">Accedi con l’utente creato in Supabase Auth.</p>
+      <form id="login-form" class="mt-7 grid gap-4">
+        <label class="text-sm font-medium">Email<input id="login-email" class="mt-1.5 h-11 w-full rounded-lg border border-gray-300 px-3 font-normal outline-none focus:border-accent focus:ring-2 focus:ring-blue-100" type="email" required autocomplete="username" /></label>
+        <label class="text-sm font-medium">Password<input class="mt-1.5 h-11 w-full rounded-lg border border-gray-300 px-3 font-normal outline-none focus:border-accent focus:ring-2 focus:ring-blue-100" name="password" type="password" required autocomplete="current-password" /></label>
+        <p id="login-error" class="hidden rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert"></p>
+        <button id="login-button" class="mt-1 rounded-lg bg-ink px-4 py-3 font-semibold text-white hover:bg-accent disabled:opacity-60" type="submit">Accedi</button>
+      </form>
+      <a class="mt-6 block text-center text-xs text-muted hover:text-ink" href="index.html">← Torna al sito</a>
+    </div>
+  </section>
+
+  <div id="admin-view" class="hidden">
+    <header class="border-b border-gray-200 bg-white">
+      <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-5">
+        <div class="flex items-center gap-4"><a href="index.html" class="text-lg font-bold tracking-tight">seconda<span class="text-accent">.</span></a><span class="hidden h-5 w-px bg-gray-200 sm:block"></span><span class="hidden text-sm text-muted sm:block">Pannello Admin</span></div>
+        <div class="flex items-center gap-3"><span id="admin-email" class="hidden text-xs text-muted md:block"></span><button id="logout-button" class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-soft">Esci</button></div>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-7xl px-5 py-8 sm:py-12">
+      <div class="mb-9"><p class="text-sm font-semibold text-accent">Dashboard</p><h1 class="mt-1 text-3xl font-bold tracking-tight">Gestisci il catalogo</h1></div>
+      <div class="mb-10 grid gap-4 sm:grid-cols-3">
+        <div class="rounded-xl border border-gray-200 bg-white p-5"><p class="text-sm text-muted">Libri totali</p><strong id="stat-books" class="mt-2 block text-3xl">—</strong></div>
+        <div class="rounded-xl border border-gray-200 bg-white p-5"><p class="text-sm text-muted">Disponibili</p><strong id="stat-available" class="mt-2 block text-3xl text-emerald-600">—</strong></div>
+        <div class="rounded-xl border border-gray-200 bg-white p-5"><p class="text-sm text-muted">Offerte in attesa</p><strong id="stat-offers" class="mt-2 block text-3xl text-accent">—</strong></div>
+      </div>
+
+      <section class="rounded-2xl border border-gray-200 bg-white">
+        <div class="border-b border-gray-200 p-5 sm:p-6"><h2 class="text-xl font-bold">Gestione inventario</h2><p class="mt-1 text-sm text-muted">Aggiungi libri e aggiorna la disponibilità.</p></div>
+        <form id="book-form" class="grid gap-4 border-b border-gray-200 bg-gray-50/70 p-5 sm:grid-cols-2 sm:p-6 lg:grid-cols-3">
+          <label class="text-sm font-medium">ISBN<input class="admin-input" name="isbn" required maxlength="17" placeholder="978..." /></label>
+          <label class="text-sm font-medium">Titolo<input class="admin-input" name="titolo" required maxlength="180" /></label>
+          <label class="text-sm font-medium">Editore / Edizione<input class="admin-input" name="editore_edizione" required placeholder="Zanichelli · 3ª edizione" /></label>
+          <label class="text-sm font-medium">Materia<input class="admin-input" name="materia" required placeholder="Matematica" /></label>
+          <label class="text-sm font-medium">Prezzo (€)<input class="admin-input" name="prezzo_richiesto" type="number" min="0" step="0.5" required /></label>
+          <label class="text-sm font-medium">Condizioni<select class="admin-input" name="condizioni" required><option>Come Nuovo</option><option>Buono</option><option>Segnato</option><option>Evidenziato</option></select></label>
+          <p id="book-error" class="hidden rounded-lg bg-red-50 p-3 text-sm text-red-700 sm:col-span-2 lg:col-span-3" role="alert"></p>
+          <div class="sm:col-span-2 lg:col-span-3"><button id="add-book-button" class="w-full rounded-lg bg-accent px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-60 sm:w-auto" type="submit">Aggiungi libro</button></div>
+        </form>
+        <div id="inventory-list" class="divide-y divide-gray-200"></div>
+        <div id="inventory-empty" class="hidden p-10 text-center text-sm text-muted">Nessun libro inserito.</div>
+      </section>
+
+      <section class="mt-8 rounded-2xl border border-gray-200 bg-white">
+        <div class="flex items-center justify-between border-b border-gray-200 p-5 sm:p-6"><div><h2 class="text-xl font-bold">Centro offerte ricevute</h2><p class="mt-1 text-sm text-muted">Le nuove proposte appaiono in tempo reale.</p></div><span class="inline-flex items-center gap-1.5 text-xs text-muted"><i class="h-2 w-2 rounded-full bg-emerald-500"></i>Live</span></div>
+        <div id="offers-list" class="divide-y divide-gray-200"></div>
+        <div id="offers-empty" class="hidden p-10 text-center text-sm text-muted">Non ci sono ancora offerte.</div>
+      </section>
+    </main>
+  </div>
+
+  <div id="admin-toast" class="fixed bottom-5 right-5 z-50 hidden max-w-sm rounded-xl bg-ink px-5 py-4 text-sm font-medium text-white shadow-xl" role="status"></div>
+  <style>.admin-input{margin-top:.375rem;height:2.75rem;width:100%;border-radius:.5rem;border:1px solid #d1d5db;background:#fff;padding:0 .75rem;font-weight:400;outline:none}.admin-input:focus{border-color:#2563eb;box-shadow:0 0 0 2px #dbeafe}</style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>
