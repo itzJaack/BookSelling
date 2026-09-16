@@ -1,9 +1,10 @@
-/* global supabase */
+/* global supabase, Richieste, Conversazione */
 const config = window.SUPABASE_CONFIG || {};
 const configured = config.url && config.anonKey && !config.url.includes("IL-TUO") && !config.anonKey.includes("LA-TUA");
 const db = configured ? supabase.createClient(config.url, config.anonKey) : null;
 const $ = selector => document.querySelector(selector);
 let books = [], offers = [], realtimeChannel = null;
+let adminChat = null, activeOfferId = null, sessionVersion = 0;
 
 function escapeHtml(value="") { return String(value).replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[c]); }
 function money(value){return `€ ${Number(value).toFixed(2).replace(".",",")}`;}
@@ -14,19 +15,22 @@ function showError(selector,message){const el=$(selector);el.textContent=message
 async function handleSession(session){
   const email=session?.user?.email?.toLowerCase();
   const owner=(config.ownerEmail||"").toLowerCase();
-  if(!session){$("#login-view").classList.remove("hidden");$("#admin-view").classList.add("hidden");return;}
+  if(!session){sessionVersion++;closeAdminChat();books=[];offers=[];$("#inventory-list").replaceChildren();$("#offers-list").replaceChildren();if(realtimeChannel){db.removeChannel(realtimeChannel);realtimeChannel=null;}$("#login-view").classList.remove("hidden");$("#admin-view").classList.add("hidden");return;}
   if(!owner || owner.includes("LA-TUA") || email!==owner){await db.auth.signOut();showError("#login-error","Questo account non è autorizzato come proprietario.");return;}
   $("#login-view").classList.add("hidden");$("#admin-view").classList.remove("hidden");$("#admin-email").textContent=email;
-  await loadAll(); subscribeRealtime();
+  const version=sessionVersion;
+  await loadAll(); if(version===sessionVersion)subscribeRealtime();
 }
 
 async function loadAll(){
+  const version=sessionVersion;
   const [booksResult,offersResult]=await Promise.all([
     db.from("Libri").select("*").order("data_inserimento",{ascending:false}),
-    db.from("Offerte_Scambi").select("*").order("data_inserimento",{ascending:false})
+    db.from("Offerte_Scambi").select("*,codice_richiesta,libro_titolo").order("data_inserimento",{ascending:false})
   ]);
   if(booksResult.error) return toast(`Errore inventario: ${booksResult.error.message}`);
-  if(offersResult.error) return toast(`Errore offerte: ${offersResult.error.message}`);
+  if(version!==sessionVersion)return;
+  if(offersResult.error) return toast(`Errore offerte: ${Richieste.errorMessage(offersResult.error)}`);
   books=booksResult.data||[];offers=offersResult.data||[];renderInventory();renderOffers();renderStats();
 }
 
@@ -51,20 +55,67 @@ function renderInventory(){
 }
 
 function renderOffers(){
-  $("#offers-empty").classList.toggle("hidden",offers.length>0);
+  const needle=$("#offer-search").value.trim().toLocaleLowerCase("it");
+  const filtered=offers.filter(offer=>`${offer.codice_richiesta} ${offer.libro_titolo} ${offer.nome_acquirente}`.toLocaleLowerCase("it").includes(needle));
+  $("#offers-empty").classList.toggle("hidden",filtered.length>0);
+  $("#offers-empty").textContent=offers.length?"Nessuna richiesta corrisponde alla ricerca.":"Non ci sono ancora offerte.";
   const bookMap=new Map(books.map(book=>[book.id,book]));
-  $("#offers-list").innerHTML=offers.map(offer=>{const book=bookMap.get(offer.libro_id);const pending=offer.stato==="In attesa";return `
+  $("#offers-list").innerHTML=filtered.map(offer=>{const book=bookMap.get(offer.libro_id);const pending=offer.stato==="In attesa";return `
     <article class="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1fr_1fr_auto] lg:items-center">
-      <div><div class="flex flex-wrap items-center gap-2"><h3 class="font-semibold">${escapeHtml(book?.titolo||"Libro eliminato")}</h3><span class="rounded-full px-2 py-0.5 text-[11px] font-semibold ${offer.stato==="Accettata"?"bg-emerald-50 text-emerald-700":offer.stato==="Rifiutata"?"bg-red-50 text-red-600":"bg-amber-50 text-amber-700"}">${escapeHtml(offer.stato)}</span></div><p class="mt-2 text-sm text-muted">${escapeHtml(offer.nome_acquirente)} · <a class="text-accent hover:underline" href="${String(offer.email_o_telefono).includes("@")?`mailto:${escapeHtml(offer.email_o_telefono)}`:`tel:${escapeHtml(offer.email_o_telefono)}`}">${escapeHtml(offer.email_o_telefono)}</a></p><p class="mt-1 text-xs text-gray-400">${formatDate(offer.data_inserimento)}</p></div>
+      <div><p class="mb-2 font-mono text-xs text-muted">${escapeHtml(offer.codice_richiesta)}</p><div class="flex flex-wrap items-center gap-2"><h3 class="font-semibold">${escapeHtml(book?.titolo||offer.libro_titolo||"Libro eliminato")}</h3><span class="rounded-full px-2 py-0.5 text-[11px] font-semibold ${offer.stato==="Accettata"?"bg-emerald-50 text-emerald-700":offer.stato==="Rifiutata"?"bg-red-50 text-red-600":"bg-amber-50 text-amber-700"}">${escapeHtml(offer.stato)}</span></div><p class="mt-2 text-sm text-muted">${escapeHtml(offer.nome_acquirente)} · <a class="text-accent hover:underline" href="${String(offer.email_o_telefono).includes("@")?`mailto:${escapeHtml(offer.email_o_telefono)}`:`tel:${escapeHtml(offer.email_o_telefono)}`}">${escapeHtml(offer.email_o_telefono)}</a></p><p class="mt-1 text-xs text-gray-400">${formatDate(offer.data_inserimento)}</p></div>
       <div class="text-sm"><p><span class="text-muted">Offerta:</span> <strong>${money(offer.prezzo_offerto)}</strong></p><p class="mt-1"><span class="text-muted">Scambio:</span> ${escapeHtml(offer.luogo_proposto)}</p>${offer.messaggio?`<p class="mt-2 text-xs italic text-muted">“${escapeHtml(offer.messaggio)}”</p>`:""}</div>
-      <div class="flex gap-2">${pending?`<button class="offer-action rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700" data-id="${offer.id}" data-status="Accettata">Accetta</button><button class="offer-action rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold hover:bg-soft" data-id="${offer.id}" data-status="Rifiutata">Rifiuta</button>`:"<span class='text-xs text-muted'>Gestita</span>"}</div>
+      <div class="flex flex-wrap gap-2">${pending?`<button class="offer-action rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700" data-id="${offer.id}" data-status="Accettata">Accetta</button><button class="offer-action rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold hover:bg-soft" data-id="${offer.id}" data-status="Rifiutata">Rifiuta</button>`:""}<button class="open-conversation rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold hover:bg-soft" data-id="${offer.id}">Messaggi</button></div>
     </article>`}).join("");
   document.querySelectorAll(".offer-action").forEach(button=>button.addEventListener("click",()=>manageOffer(button.dataset.id,button.dataset.status)));
+  document.querySelectorAll(".open-conversation").forEach(button=>button.addEventListener("click",()=>openAdminChat(button.dataset.id)));
 }
 
 async function setAvailability(id,available){const {error}=await db.from("Libri").update({disponibile:available}).eq("id",id);if(error){toast(error.message);await loadAll();}else toast(available?"Libro segnato disponibile.":"Libro segnato venduto.");}
-async function deleteBook(id,title){if(!confirm(`Eliminare “${title}”? Verranno eliminate anche le offerte collegate.`))return;const {error}=await db.from("Libri").delete().eq("id",id);if(error)toast(error.message);else toast("Libro eliminato.");}
-async function manageOffer(id,status){const {error}=await db.rpc("gestisci_offerta",{p_offerta_id:id,p_stato:status});if(error)toast(error.message);else toast(status==="Accettata"?"Offerta accettata e libro segnato venduto.":"Offerta rifiutata.");}
+async function deleteBook(id,title){if(!confirm(`Eliminare “${title}” dal catalogo? Richieste e conversazioni saranno conservate.`))return;const {error}=await db.from("Libri").delete().eq("id",id);if(error)toast(error.message);else{toast("Libro eliminato. Conversazioni conservate.");await loadAll();}}
+async function manageOffer(id,status){const {error}=await db.rpc("gestisci_offerta",{p_offerta_id:id,p_stato:status});if(error)toast(error.message);else{toast(status==="Accettata"?"Offerta accettata e libro segnato venduto.":"Offerta rifiutata.");await loadAll();}}
+
+function closeAdminChat(){adminChat?.close();adminChat=null;activeOfferId=null;$("#admin-conversation").close();$("#admin-private-link").value="";document.body.style.overflow="";}
+function openAdminChat(id){
+  const offer=offers.find(item=>item.id===id);if(!offer)return;
+  adminChat?.close();activeOfferId=id;
+  $("#admin-chat-code").textContent=offer.codice_richiesta;
+  $("#admin-chat-title").textContent=offer.libro_titolo;
+  $("#admin-chat-person").textContent=`${offer.nome_acquirente} · ${offer.email_o_telefono} · ${offer.stato}`;
+  $("#admin-link-result").classList.add("hidden");$("#admin-private-link").value="";$("#admin-link-feedback").textContent="";
+  $("#admin-conversation").showModal();document.body.style.overflow="hidden";
+  adminChat=new Conversazione($("#admin-chat"),{
+    viewer:"Venditore",
+    load:async({after,before})=>{
+      let query=db.from("Messaggi_Richieste").select("id,autore,testo,data_inserimento").eq("offerta_id",id);
+      if(before!==null)query=query.lt("id",before);else if(after)query=query.gt("id",after);
+      const {data,error}=await query.order("id",{ascending:before===null&&after>0}).limit(50);
+      if(error)throw error;
+      return {messaggi:data,precedenti:data.length===50,successivi:before===null&&after>0&&data.length===50,richiesta:offers.find(item=>item.id===id)};
+    },
+    send:async(text,clientId)=>{
+      const {error}=await db.from("Messaggi_Richieste").insert({offerta_id:id,client_id:clientId,autore:"Venditore",testo:text});
+      if(error&&error.code!=="23505")throw error;
+    },
+    onDetails:details=>{if(details)$("#admin-chat-person").textContent=`${details.nome_acquirente} · ${details.email_o_telefono} · ${details.stato}`;}
+  });
+}
+$("#offer-search").addEventListener("input",renderOffers);
+$("#close-admin-chat").addEventListener("click",closeAdminChat);
+$("#admin-conversation").addEventListener("cancel",event=>{event.preventDefault();closeAdminChat();});
+$("#copy-admin-link").addEventListener("click",()=>Richieste.copy($("#admin-private-link").value,$("#admin-link-feedback")));
+$("#regenerate-link").addEventListener("click",async()=>{
+  const id=activeOfferId;if(!id||!confirm("Generare un nuovo accesso? Il link privato precedente non funzionerà più."))return;
+  const button=$("#regenerate-link");button.disabled=true;
+  try{
+    const chiave=Richieste.secret();
+    const {data,error}=await db.rpc("rigenera_accesso_richiesta",{p_offerta_id:id,p_chiave:chiave});
+    if(error)throw error;
+    if(activeOfferId!==id)return;
+    $("#admin-private-link").value=Richieste.link({codice:data,chiave});$("#admin-link-result").classList.remove("hidden");
+    $("#admin-link-feedback").textContent="Nuovo link pronto. Invialo privatamente all’acquirente dopo aver verificato il suo contatto.";
+  }catch(error){if(activeOfferId===id)$("#admin-link-feedback").textContent=Richieste.errorMessage(error);}
+  finally{button.disabled=false;}
+});
 
 $("#login-form").addEventListener("submit",async event=>{
   event.preventDefault();const button=$("#login-button"),errorBox=$("#login-error");errorBox.classList.add("hidden");
@@ -73,14 +124,14 @@ $("#login-form").addEventListener("submit",async event=>{
   const {error}=await db.auth.signInWithPassword({email:$("#login-email").value.trim(),password:String(values.get("password"))});
   if(error)showError("#login-error","Email o password non corrette.");button.disabled=false;button.textContent="Accedi";
 });
-$("#logout-button").addEventListener("click",async()=>{if(realtimeChannel)await db.removeChannel(realtimeChannel);await db.auth.signOut();});
+$("#logout-button").addEventListener("click",async()=>{closeAdminChat();if(realtimeChannel){await db.removeChannel(realtimeChannel);realtimeChannel=null;}await db.auth.signOut();});
 $("#book-form").addEventListener("submit",async event=>{
   event.preventDefault();const bookForm=event.currentTarget,button=$("#add-book-button"),errorBox=$("#book-error"),values=new FormData(bookForm);button.disabled=true;errorBox.classList.add("hidden");
   const payload={isbn:String(values.get("isbn")).trim(),titolo:String(values.get("titolo")).trim(),editore_edizione:String(values.get("editore_edizione")).trim(),materia:String(values.get("materia")).trim(),prezzo_richiesto:Number(values.get("prezzo_richiesto")),condizioni:values.get("condizioni"),disponibile:true};
   const {error}=await db.from("Libri").insert(payload);if(error)showError("#book-error",error.message);else{bookForm.reset();toast("Libro aggiunto.");}button.disabled=false;
 });
 
-function subscribeRealtime(){if(realtimeChannel)return;realtimeChannel=db.channel("admin-live").on("postgres_changes",{event:"*",schema:"public",table:"Libri"},loadAll).on("postgres_changes",{event:"*",schema:"public",table:"Offerte_Scambi"},loadAll).subscribe();}
+function subscribeRealtime(){if(realtimeChannel)return;realtimeChannel=db.channel("admin-live").on("postgres_changes",{event:"*",schema:"public",table:"Libri"},loadAll).on("postgres_changes",{event:"*",schema:"public",table:"Offerte_Scambi"},loadAll).on("postgres_changes",{event:"INSERT",schema:"public",table:"Messaggi_Richieste"},payload=>{if(activeOfferId===payload.new.offerta_id)adminChat?.refresh();else if(payload.new.autore==="Acquirente"){const offer=offers.find(item=>item.id===payload.new.offerta_id);toast(`Nuovo messaggio · ${offer?.codice_richiesta||"richiesta"}`);}}).subscribe();}
 
 if(!configured)showError("#login-error","Inserisci URL, Anon Key ed email proprietario in supabase-config.js.");
 else {$("#login-email").value=config.ownerEmail&&!config.ownerEmail.includes("LA-TUA")?config.ownerEmail:"";db.auth.onAuthStateChange((_event,session)=>setTimeout(()=>handleSession(session),0));db.auth.getSession().then(({data})=>handleSession(data.session));}

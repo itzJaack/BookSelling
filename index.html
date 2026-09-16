@@ -6,6 +6,7 @@
   <meta name="description" content="Libri scolastici usati, senza commissioni." />
   <meta name="theme-color" content="#ffffff" />
   <title>Seconda — Libri scolastici usati</title>
+  <link rel="stylesheet" href="background.css" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config={theme:{extend:{colors:{ink:'#171717',muted:'#737373',accent:'#2563eb',canvas:'#f5f5f4'}}}};</script>
   <style>
@@ -13,14 +14,18 @@
   </style>
 </head>
 <body class="bg-canvas text-ink antialiased">
+  <div class="side-background" aria-hidden="true">
+    <div class="side-background__rail side-background__rail--left"></div>
+    <div class="side-background__rail side-background__rail--right"></div>
+  </div>
   <header class="sticky top-0 z-30 border-b border-neutral-200 bg-white/95 backdrop-blur">
     <div class="mx-auto flex h-16 max-w-5xl items-center justify-between border-x border-neutral-200 px-5">
       <a href="#" class="flex items-center gap-2.5 font-semibold tracking-tight"><span class="grid h-7 w-7 place-items-center rounded-md border border-neutral-300 text-xs">S</span>Seconda</a>
-      <a href="admin.html" class="rounded-md border border-neutral-300 px-3 py-1.5 text-xs text-muted transition-colors hover:border-neutral-500 hover:text-ink">Admin</a>
+      <nav class="flex items-center gap-3"><a href="richiesta.html" class="text-xs text-muted hover:text-ink">Le mie richieste</a><a href="admin.html" class="rounded-md border border-neutral-300 px-3 py-1.5 text-xs text-muted transition-colors hover:border-neutral-500 hover:text-ink">Admin</a></nav>
     </div>
   </header>
 
-  <main class="mx-auto max-w-5xl border-x border-neutral-200 bg-white px-5">
+  <main class="relative mx-auto max-w-5xl border-x border-neutral-200 bg-white px-5">
     <section class="py-16 sm:py-24">
       <p class="mb-4 text-xs font-medium uppercase tracking-[.14em] text-accent">Ricerca</p>
       <h1 class="max-w-2xl text-4xl font-semibold leading-tight tracking-[-.035em] sm:text-6xl">i tuoi nuovi libri!</h1>
@@ -47,34 +52,45 @@
     </section>
   </main>
 
-  <footer class="border-t border-neutral-200 bg-white">
+  <footer class="relative border-t border-neutral-200 bg-white">
     <div class="mx-auto flex max-w-5xl justify-between border-x border-neutral-200 px-5 py-8 text-xs text-muted"><p>Seconda · 2026</p><p>Nessun pagamento online</p></div>
   </footer>
 
   <dialog id="offer-modal" class="m-auto w-[calc(100%_-_2rem)] max-w-lg rounded-2xl border border-neutral-200 bg-white p-0 text-ink shadow-2xl">
     <div class="relative max-h-[92vh] overflow-y-auto p-5 sm:p-7">
       <button id="close-modal" class="absolute right-4 top-3 grid h-8 w-8 place-items-center rounded-full border border-neutral-200 text-xl text-muted hover:bg-neutral-50 hover:text-black" type="button" aria-label="Chiudi">×</button>
-      <p class="text-xs font-medium text-accent">NUOVA PROPOSTA</p><h2 class="mt-1 pr-8 text-xl font-semibold">Fai un’offerta</h2>
+      <p class="text-xs font-medium text-accent">LA TUA RICHIESTA</p><h2 id="offer-heading" class="mt-1 pr-8 text-xl font-semibold">Fai un’offerta</h2>
       <div id="selected-book" class="my-5 rounded-lg border border-neutral-200 bg-neutral-50 p-3"></div>
       <form id="offer-form" class="grid gap-4">
         <input id="offer-book-id" name="libro_id" type="hidden" />
-        <label class="text-sm">Nome<input class="mt-1 block h-10 w-full rounded-lg border border-neutral-300 px-3 outline-none focus:border-accent" name="nome_acquirente" required maxlength="100" /></label>
-        <label class="text-sm">Email o WhatsApp<input class="mt-1 block h-10 w-full rounded-lg border border-neutral-300 px-3 outline-none focus:border-accent" name="email_o_telefono" required maxlength="160" /></label>
+        <label class="text-sm">Nome<input class="mt-1 block h-10 w-full rounded-lg border border-neutral-300 px-3 outline-none focus:border-accent" name="nome_acquirente" required minlength="2" maxlength="100" /></label>
+        <label class="text-sm">Email o WhatsApp<input class="mt-1 block h-10 w-full rounded-lg border border-neutral-300 px-3 outline-none focus:border-accent" name="email_o_telefono" required minlength="5" maxlength="160" /></label>
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="text-sm">Prezzo offerto (€)<input id="offer-price" class="mt-1 block h-10 w-full rounded-lg border border-neutral-300 px-3 outline-none focus:border-accent" name="prezzo_offerto" type="number" min="0.5" step="0.5" required /></label>
-          <label class="text-sm">Luogo e ora<input class="mt-1 block h-10 w-full rounded-lg border border-neutral-300 px-3 outline-none focus:border-accent" name="luogo_proposto" required maxlength="160" /></label>
+          <label class="text-sm">Luogo e ora<input class="mt-1 block h-10 w-full rounded-lg border border-neutral-300 px-3 outline-none focus:border-accent" name="luogo_proposto" required minlength="2" maxlength="160" /></label>
         </div>
         <label class="text-sm">Messaggio <span class="text-muted">(facoltativo)</span><textarea class="mt-1 block w-full rounded-lg border border-neutral-300 p-3 outline-none focus:border-accent" name="messaggio" rows="3" maxlength="1000"></textarea></label>
         <p id="form-error" class="hidden rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert"></p>
         <button id="submit-offer" class="rounded-lg bg-ink px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-accent disabled:opacity-50" type="submit">Invia offerta</button>
         <p class="text-center text-xs text-muted">Il contatto sarà visibile solo al venditore.</p>
       </form>
+      <section id="offer-receipt" class="hidden" aria-live="polite">
+        <p class="text-sm leading-6 text-muted">Proposta inviata. Conserva questo codice per riferirti alla richiesta:</p>
+        <p id="receipt-code" class="my-4 rounded-lg border border-neutral-200 bg-neutral-50 p-4 font-mono text-lg font-semibold"></p>
+        <p class="text-sm leading-6 text-muted">Dal link privato puoi leggere le risposte e scrivere al venditore, anche dopo lo scambio.</p>
+        <label class="mt-4 block text-xs text-muted">Link privato<input id="receipt-link" readonly class="mt-1 w-full rounded-lg border border-neutral-300 p-2.5 text-xs text-ink" /></label>
+        <div class="mt-4 flex flex-wrap gap-2"><a id="receipt-open" class="rounded-lg bg-ink px-4 py-2.5 text-sm text-white">Apri conversazione</a><button id="receipt-copy" type="button" class="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm">Copia link</button></div>
+        <p id="receipt-feedback" class="mt-4 text-xs leading-5 text-muted" role="status"></p>
+        <p class="mt-2 text-xs leading-5 text-muted">Chi possiede il link può accedere ai messaggi. Non condividerlo pubblicamente.</p>
+      </section>
     </div>
   </dialog>
 
   <div id="toast" class="fixed bottom-4 right-4 z-50 hidden max-w-sm rounded-lg border border-neutral-700 bg-ink px-4 py-3 text-sm text-white shadow-lg" role="status"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
+  <script src="richieste-common.js"></script>
   <script src="app.js"></script>
+  <script src="background.js"></script>
 </body>
 </html>

@@ -61,16 +61,26 @@
 
       <section class="mt-8 rounded-2xl border border-gray-200 bg-white">
         <div class="flex items-center justify-between border-b border-gray-200 p-5 sm:p-6"><div><h2 class="text-xl font-bold">Centro offerte ricevute</h2><p class="mt-1 text-sm text-muted">Le nuove proposte appaiono in tempo reale.</p></div><span class="inline-flex items-center gap-1.5 text-xs text-muted"><i class="h-2 w-2 rounded-full bg-emerald-500"></i>Live</span></div>
+        <div class="border-b border-gray-200 p-5"><label for="offer-search" class="text-xs text-muted">Cerca una richiesta</label><input id="offer-search" type="search" class="admin-input" placeholder="Codice, libro o nome acquirente" /></div>
         <div id="offers-list" class="divide-y divide-gray-200"></div>
         <div id="offers-empty" class="hidden p-10 text-center text-sm text-muted">Non ci sono ancora offerte.</div>
       </section>
     </main>
   </div>
 
+  <dialog id="admin-conversation" class="m-auto w-[calc(100%_-_2rem)] max-w-2xl rounded-2xl border border-gray-200 bg-white p-0 text-ink shadow-xl">
+    <div class="max-h-[92vh] overflow-y-auto p-5 sm:p-7">
+      <div class="flex items-start justify-between gap-4"><div><p id="admin-chat-code" class="font-mono text-xs text-muted"></p><h2 id="admin-chat-title" class="mt-2 text-lg font-semibold"></h2><p id="admin-chat-person" class="mt-2 break-words text-sm text-muted"></p></div><button id="close-admin-chat" type="button" class="rounded-lg border border-gray-300 px-3 py-2 text-sm" aria-label="Chiudi conversazione">Chiudi</button></div>
+      <div id="admin-chat" class="mt-6"></div>
+      <details class="mt-6 border-t border-gray-200 pt-4"><summary class="cursor-pointer text-xs text-muted">Recupero accesso acquirente</summary><p class="mt-3 text-xs leading-5 text-muted">Se l’acquirente ha perso il link, verifica il suo contatto e genera un nuovo accesso. Il link precedente smetterà di funzionare. Puoi farlo anche per richieste meno recenti.</p><button id="regenerate-link" type="button" class="mt-3 rounded-lg border border-gray-300 px-3 py-2 text-xs disabled:opacity-50">Genera nuovo link privato</button><div id="admin-link-result" class="mt-3 hidden"><label class="text-xs text-muted">Invia questo link solo all’acquirente<input id="admin-private-link" readonly class="admin-input text-xs" /></label><button id="copy-admin-link" type="button" class="mt-2 rounded-lg border border-gray-300 px-3 py-2 text-xs">Copia link</button></div><p id="admin-link-feedback" class="mt-2 text-xs text-muted" role="status"></p></details>
+    </div>
+  </dialog>
+
   <div id="admin-toast" class="fixed bottom-5 right-5 z-50 hidden max-w-sm rounded-xl bg-ink px-5 py-4 text-sm font-medium text-white shadow-xl" role="status"></div>
-  <style>.admin-input{margin-top:.375rem;height:2.75rem;width:100%;border-radius:.5rem;border:1px solid #d1d5db;background:#fff;padding:0 .75rem;font-weight:400;outline:none}.admin-input:focus{border-color:#2563eb;box-shadow:0 0 0 2px #dbeafe}</style>
+  <style>dialog::backdrop{background:rgba(0,0,0,.4)}.admin-input{margin-top:.375rem;height:2.75rem;width:100%;border-radius:.5rem;border:1px solid #d1d5db;background:#fff;padding:0 .75rem;font-weight:400;outline:none}.admin-input:focus{border-color:#2563eb;box-shadow:0 0 0 2px #dbeafe}</style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
+  <script src="richieste-common.js"></script>
   <script src="admin.js"></script>
 </body>
 </html>

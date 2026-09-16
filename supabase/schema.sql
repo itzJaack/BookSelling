@@ -1,6 +1,8 @@
 -- Seconda Pagina — schema iniziale per Supabase
 -- 1) Sostituisci proprietario@example.com con l'email del tuo account Supabase Auth.
 -- 2) Esegui tutto in Supabase Dashboard > SQL Editor > New query.
+-- 3) Esegui poi supabase/messaggi.sql per codici richiesta e conversazioni private.
+-- Su un database già configurato, applica solo messaggi.sql per questo aggiornamento.
 
 create extension if not exists "pgcrypto";
 

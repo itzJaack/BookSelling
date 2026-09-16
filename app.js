@@ -1,4 +1,4 @@
-/* global supabase */
+/* global supabase, Richieste */
 const demoBooks = [
   { id:"demo-1", isbn:"9788808420649", titolo:"Matematica.verde 2", editore_edizione:"Zanichelli · 3ª edizione", materia:"Matematica", prezzo_richiesto:18, condizioni:"Come Nuovo", disponibile:true },
   { id:"demo-2", isbn:"9788839535985", titolo:"La vita davanti a noi", editore_edizione:"Paravia · Vol. 1", materia:"Italiano", prezzo_richiesto:14.5, condizioni:"Buono", disponibile:true },
@@ -12,6 +12,7 @@ const config = window.SUPABASE_CONFIG || {};
 const configured = config.url && config.anonKey && !config.url.includes("IL-TUO") && !config.anonKey.includes("LA-TUA");
 const db = configured ? supabase.createClient(config.url, config.anonKey) : null;
 let books = demoBooks, searchTerm = "", condition = "";
+let pendingRequest = null, submittingOffer = false;
 
 const $ = selector => document.querySelector(selector);
 const grid = $("#books-grid"), emptyState = $("#empty-state"), resultCount = $("#result-count");
@@ -51,25 +52,46 @@ async function loadBooks() {
 
 function openOffer(id) {
   const book=books.find(item=>String(item.id)===String(id)); if(!book||!book.disponibile)return;
+  if(submittingOffer)return;
+  pendingRequest=null;form.classList.remove("hidden");$("#offer-receipt").classList.add("hidden");$("#offer-heading").textContent="Fai un’offerta";
   form.reset(); $("#offer-book-id").value=book.id; $("#offer-price").value=book.prezzo_richiesto;
   $("#selected-book").innerHTML=`<p class="font-semibold">${escapeHtml(book.titolo)}</p><p class="mt-1 text-sm text-muted">${escapeHtml(book.materia)} · € ${Number(book.prezzo_richiesto).toFixed(2).replace(".",",")}</p>`;
   $("#form-error").classList.add("hidden"); modal.showModal(); document.body.classList.add("modal-open");
 }
-function closeModal(){modal.close();document.body.classList.remove("modal-open");}
+function closeModal(){if(submittingOffer)return;modal.close();document.body.classList.remove("modal-open");}
 function toast(message){const el=$("#toast");el.textContent=message;el.classList.remove("hidden");setTimeout(()=>el.classList.add("hidden"),4500);}
 
 $("#hero-search").addEventListener("submit",event=>{event.preventDefault();searchTerm=$("#search-input").value;renderBooks();$("#catalogo").scrollIntoView({behavior:"smooth"});});
 $("#search-input").addEventListener("input",event=>{searchTerm=event.target.value;renderBooks();});
 $("#condition-filter").addEventListener("change",event=>{condition=event.target.value;renderBooks();});
 $("#close-modal").addEventListener("click",closeModal); modal.addEventListener("click",event=>{if(event.target===modal)closeModal();});
+modal.addEventListener("cancel",event=>{if(submittingOffer)event.preventDefault();});
+modal.addEventListener("close",()=>document.body.classList.remove("modal-open"));
+$("#receipt-copy").addEventListener("click",()=>Richieste.copy($("#receipt-link").value,$("#receipt-feedback")));
 
 form.addEventListener("submit",async event=>{
-  event.preventDefault(); const button=$("#submit-offer"), errorBox=$("#form-error"), values=new FormData(form);
-  button.disabled=true;button.textContent="Invio…";errorBox.classList.add("hidden");
+  event.preventDefault();if(submittingOffer)return; const button=$("#submit-offer"), errorBox=$("#form-error"), values=new FormData(form);
+  submittingOffer=true;for(const input of form.elements)input.disabled=true;button.textContent="Invio…";errorBox.classList.add("hidden");
   const payload={libro_id:values.get("libro_id"),nome_acquirente:String(values.get("nome_acquirente")).trim(),email_o_telefono:String(values.get("email_o_telefono")).trim(),prezzo_offerto:Number(values.get("prezzo_offerto")),luogo_proposto:String(values.get("luogo_proposto")).trim(),messaggio:String(values.get("messaggio")).trim(),stato:"In attesa"};
-  try { if(!db)throw new Error("Configura Supabase prima di inviare offerte."); const {error}=await db.from("Offerte_Scambi").insert(payload);if(error)throw error;closeModal();toast("Proposta inviata. Il venditore ti ricontatterà."); }
-  catch(error){errorBox.textContent=error.message||"Invio non riuscito.";errorBox.classList.remove("hidden");}
-  finally{button.disabled=false;button.textContent="Invia proposta";}
+  try {
+    if(!db)throw new Error("Configura Supabase prima di inviare offerte.");
+    const fingerprint=JSON.stringify(payload);
+    if(!pendingRequest||pendingRequest.fingerprint!==fingerprint)pendingRequest={fingerprint,id:crypto.randomUUID(),chiave:Richieste.secret()};
+    const {data,error}=await db.rpc("crea_richiesta",{
+      p_id:pendingRequest.id,p_chiave:pendingRequest.chiave,p_libro_id:payload.libro_id,
+      p_nome:payload.nome_acquirente,p_contatto:payload.email_o_telefono,p_prezzo:payload.prezzo_offerto,
+      p_luogo:payload.luogo_proposto,p_messaggio:payload.messaggio
+    });
+    if(error)throw error;
+    const receipt={codice:data.codice_richiesta,chiave:pendingRequest.chiave,titolo:books.find(book=>String(book.id)===String(payload.libro_id))?.titolo||"Richiesta"};
+    $("#receipt-code").textContent=receipt.codice;
+    $("#receipt-link").value=Richieste.link(receipt);$("#receipt-open").href=Richieste.link(receipt);
+    $("#receipt-feedback").textContent=Richieste.save(receipt)?"Salvata in ‘Le mie richieste’ su questo browser. Copia il link per aprirla su un altro dispositivo.":"Salvataggio sul dispositivo non disponibile: copia e conserva il link prima di chiudere.";
+    form.classList.add("hidden");$("#offer-receipt").classList.remove("hidden");$("#offer-heading").textContent="Richiesta inviata";
+    $("#receipt-open").focus();
+  }
+  catch(error){errorBox.textContent=Richieste.errorMessage(error);errorBox.classList.remove("hidden");}
+  finally{submittingOffer=false;for(const input of form.elements)input.disabled=false;button.textContent="Invia proposta";}
 });
 
 loadBooks();
