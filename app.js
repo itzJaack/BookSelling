@@ -1,4 +1,4 @@
-/* global supabase, Richieste */
+/* global supabase, Richieste, Condizioni */
 const demoBooks = [
   { id:"demo-1", isbn:"9788808420649", titolo:"Matematica.verde 2", editore_edizione:"Zanichelli · 3ª edizione", materia:"Matematica", prezzo_richiesto:18, condizioni:"Come Nuovo", disponibile:true },
   { id:"demo-2", isbn:"9788839535985", titolo:"La vita davanti a noi", editore_edizione:"Paravia · Vol. 1", materia:"Italiano", prezzo_richiesto:14.5, condizioni:"Buono", disponibile:true },
@@ -17,6 +17,7 @@ let pendingRequest = null, submittingOffer = false;
 const $ = selector => document.querySelector(selector);
 const grid = $("#books-grid"), emptyState = $("#empty-state"), resultCount = $("#result-count");
 const banner = $("#status-banner"), modal = $("#offer-modal"), form = $("#offer-form");
+Condizioni.populate($("#condition-filter"), true);
 
 function escapeHtml(value="") { return String(value).replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[c]); }
 function normalized(value) { return String(value||"").toLocaleLowerCase("it").normalize("NFD").replace(/[\u0300-\u036f]/g,""); }
@@ -34,7 +35,7 @@ function renderBooks() {
       <h3 class="mt-4 text-base font-semibold leading-snug">${escapeHtml(book.titolo)}</h3>
       <p class="mt-2 text-sm text-muted">${escapeHtml(book.editore_edizione)}</p>
       <p class="mt-3 font-mono text-xs text-gray-400">ISBN ${escapeHtml(book.isbn)}</p>
-      <div class="mt-4"><span class="rounded-md border px-2 py-1 text-[11px] font-medium ${book.condizioni === "Come Nuovo" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : book.condizioni === "Buono" ? "border-blue-200 bg-blue-50 text-blue-700" : "border-amber-200 bg-amber-50 text-amber-700"}">${escapeHtml(book.condizioni)}</span></div>
+      <div class="mt-4"><span class="rounded-md border px-2 py-1 text-[11px] font-medium ${Condizioni.badge(book.condizioni)}">${escapeHtml(book.condizioni)}</span></div>
       <div class="mt-auto flex items-end justify-between gap-4 pt-6">
         <strong class="text-lg">€ ${Number(book.prezzo_richiesto).toFixed(2).replace(".",",")}</strong>
         <button class="offer-button rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${book.disponibile ? "border-ink bg-ink text-white hover:border-accent hover:bg-accent" : "cursor-not-allowed border-neutral-200 text-neutral-400"}" data-book-id="${escapeHtml(book.id)}" ${book.disponibile ? "" : "disabled"}>${book.disponibile ? "Fai un’offerta" : "Venduto"}</button>

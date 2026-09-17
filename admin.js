@@ -1,10 +1,36 @@
-/* global supabase, Richieste, Conversazione */
+/* global supabase, Richieste, Conversazione, Condizioni */
 const config = window.SUPABASE_CONFIG || {};
 const configured = config.url && config.anonKey && !config.url.includes("IL-TUO") && !config.anonKey.includes("LA-TUA");
 const db = configured ? supabase.createClient(config.url, config.anonKey) : null;
 const $ = selector => document.querySelector(selector);
 let books = [], offers = [], realtimeChannel = null;
 let adminChat = null, activeOfferId = null, sessionVersion = 0;
+let editingBookId = null, savingBook = false;
+Condizioni.populate($("#book-form").elements.namedItem("condizioni"));
+
+function resetBookForm(){
+  editingBookId=null;
+  $("#book-form").reset();
+  $("#book-form-title").textContent="Aggiungi un libro";
+  $("#book-edit-notice").classList.add("hidden");
+  $("#cancel-book-edit").classList.add("hidden");
+  $("#book-error").classList.add("hidden");
+  $("#add-book-button").textContent="Aggiungi libro";
+}
+
+function editBook(id){
+  if(savingBook)return;
+  const book=books.find(item=>item.id===id);if(!book)return;
+  const form=$("#book-form");editingBookId=id;
+  for(const field of ["isbn","titolo","editore_edizione","materia","prezzo_richiesto","condizioni"])form.elements.namedItem(field).value=book[field];
+  $("#book-form-title").textContent="Modifica annuncio";
+  $("#book-edit-notice").classList.remove("hidden");
+  $("#cancel-book-edit").classList.remove("hidden");
+  $("#book-error").classList.add("hidden");
+  $("#add-book-button").textContent="Salva modifiche";
+  form.scrollIntoView({behavior:"smooth",block:"center"});
+  form.elements.namedItem("titolo").focus({preventScroll:true});
+}
 
 function escapeHtml(value="") { return String(value).replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[c]); }
 function money(value){return `€ ${Number(value).toFixed(2).replace(".",",")}`;}
@@ -15,7 +41,7 @@ function showError(selector,message){const el=$(selector);el.textContent=message
 async function handleSession(session){
   const email=session?.user?.email?.toLowerCase();
   const owner=(config.ownerEmail||"").toLowerCase();
-  if(!session){sessionVersion++;closeAdminChat();books=[];offers=[];$("#inventory-list").replaceChildren();$("#offers-list").replaceChildren();if(realtimeChannel){db.removeChannel(realtimeChannel);realtimeChannel=null;}$("#login-view").classList.remove("hidden");$("#admin-view").classList.add("hidden");return;}
+  if(!session){sessionVersion++;savingBook=false;resetBookForm();for(const input of $("#book-form").elements)input.disabled=false;closeAdminChat();books=[];offers=[];$("#inventory-list").replaceChildren();$("#offers-list").replaceChildren();if(realtimeChannel){db.removeChannel(realtimeChannel);realtimeChannel=null;}$("#login-view").classList.remove("hidden");$("#admin-view").classList.add("hidden");return;}
   if(!owner || owner.includes("LA-TUA") || email!==owner){await db.auth.signOut();showError("#login-error","Questo account non è autorizzato come proprietario.");return;}
   $("#login-view").classList.add("hidden");$("#admin-view").classList.remove("hidden");$("#admin-email").textContent=email;
   const version=sessionVersion;
@@ -45,12 +71,14 @@ function renderInventory(){
   $("#inventory-list").innerHTML=books.map(book=>`
     <article class="grid gap-4 p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:p-6">
       <div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><h3 class="font-semibold">${escapeHtml(book.titolo)}</h3><span class="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-muted">${escapeHtml(book.materia)}</span></div><p class="mt-1 text-sm text-muted">${escapeHtml(book.editore_edizione)} · ISBN ${escapeHtml(book.isbn)}</p><p class="mt-2 text-sm"><strong>${money(book.prezzo_richiesto)}</strong><span class="mx-2 text-gray-300">|</span>${escapeHtml(book.condizioni)}</p></div>
-      <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center gap-3">
         <label class="flex cursor-pointer items-center gap-2 text-xs font-medium"><span>${book.disponibile?"Disponibile":"Venduto"}</span><input class="availability-toggle peer sr-only" type="checkbox" data-id="${book.id}" ${book.disponibile?"checked":""}><span class="relative h-6 w-11 rounded-full bg-gray-300 transition peer-checked:bg-emerald-500 after:absolute after:left-1 after:top-1 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-5"></span></label>
+        <button type="button" class="edit-book rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold hover:bg-soft" data-id="${book.id}" aria-label="Modifica ${escapeHtml(book.titolo)}">Modifica</button>
         <button class="delete-book rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50" data-id="${book.id}" data-title="${escapeHtml(book.titolo)}">Elimina</button>
       </div>
     </article>`).join("");
   document.querySelectorAll(".availability-toggle").forEach(input=>input.addEventListener("change",()=>setAvailability(input.dataset.id,input.checked)));
+  document.querySelectorAll(".edit-book").forEach(button=>button.addEventListener("click",()=>editBook(button.dataset.id)));
   document.querySelectorAll(".delete-book").forEach(button=>button.addEventListener("click",()=>deleteBook(button.dataset.id,button.dataset.title)));
 }
 
@@ -125,10 +153,27 @@ $("#login-form").addEventListener("submit",async event=>{
   if(error)showError("#login-error","Email o password non corrette.");button.disabled=false;button.textContent="Accedi";
 });
 $("#logout-button").addEventListener("click",async()=>{closeAdminChat();if(realtimeChannel){await db.removeChannel(realtimeChannel);realtimeChannel=null;}await db.auth.signOut();});
+$("#cancel-book-edit").addEventListener("click",()=>{if(!savingBook)resetBookForm();});
 $("#book-form").addEventListener("submit",async event=>{
-  event.preventDefault();const bookForm=event.currentTarget,button=$("#add-book-button"),errorBox=$("#book-error"),values=new FormData(bookForm);button.disabled=true;errorBox.classList.add("hidden");
-  const payload={isbn:String(values.get("isbn")).trim(),titolo:String(values.get("titolo")).trim(),editore_edizione:String(values.get("editore_edizione")).trim(),materia:String(values.get("materia")).trim(),prezzo_richiesto:Number(values.get("prezzo_richiesto")),condizioni:values.get("condizioni"),disponibile:true};
-  const {error}=await db.from("Libri").insert(payload);if(error)showError("#book-error",error.message);else{bookForm.reset();toast("Libro aggiunto.");}button.disabled=false;
+  event.preventDefault();if(savingBook)return;
+  const bookForm=event.currentTarget,button=$("#add-book-button"),values=new FormData(bookForm),id=editingBookId,version=sessionVersion;
+  savingBook=true;for(const input of bookForm.elements)input.disabled=true;
+  button.textContent="Salvataggio…";$("#book-error").classList.add("hidden");
+  const payload={isbn:String(values.get("isbn")).trim(),titolo:String(values.get("titolo")).trim(),editore_edizione:String(values.get("editore_edizione")).trim(),materia:String(values.get("materia")).trim(),prezzo_richiesto:Number(values.get("prezzo_richiesto")),condizioni:values.get("condizioni")};
+  try{
+    if(!db)throw new Error("Configura Supabase prima di salvare.");
+    if(payload.isbn.length<10||payload.isbn.length>17||payload.titolo.length<2||payload.titolo.length>180||!payload.editore_edizione||!payload.materia||!Condizioni.values.includes(payload.condizioni)||!Number.isFinite(payload.prezzo_richiesto)||payload.prezzo_richiesto<0||payload.prezzo_richiesto>999999.99)throw new Error("Controlla i campi: ISBN di 10–17 caratteri, titolo di almeno 2 caratteri e prezzo valido.");
+    // In modifica non sovrascrivere disponibilità, ID o data di inserimento.
+    const query=id?db.from("Libri").update(payload).eq("id",id):db.from("Libri").insert({...payload,disponibile:true});
+    const {error}=await query.select("id").single();
+    if(error)throw error;
+    if(version!==sessionVersion)return;
+    resetBookForm();toast(id?"Annuncio aggiornato.":"Libro aggiunto.");await loadAll();
+  }catch(error){
+    if(version===sessionVersion)showError("#book-error",error.code==="23505"?"Esiste già un libro con questo ISBN.":error.code==="PGRST116"?"Libro non trovato o modifica non autorizzata. Ricarica l’inventario.":error.code==="23514"?"Dati non validi. Per le nuove condizioni verifica che la migrazione SQL sia stata applicata.":error.message||"Salvataggio non riuscito. Riprova.");
+  }finally{
+    if(version===sessionVersion){savingBook=false;for(const input of bookForm.elements)input.disabled=false;button.textContent=editingBookId?"Salva modifiche":"Aggiungi libro";}
+  }
 });
 
 function subscribeRealtime(){if(realtimeChannel)return;realtimeChannel=db.channel("admin-live").on("postgres_changes",{event:"*",schema:"public",table:"Libri"},loadAll).on("postgres_changes",{event:"*",schema:"public",table:"Offerte_Scambi"},loadAll).on("postgres_changes",{event:"INSERT",schema:"public",table:"Messaggi_Richieste"},payload=>{if(activeOfferId===payload.new.offerta_id)adminChat?.refresh();else if(payload.new.autore==="Acquirente"){const offer=offers.find(item=>item.id===payload.new.offerta_id);toast(`Nuovo messaggio · ${offer?.codice_richiesta||"richiesta"}`);}}).subscribe();}

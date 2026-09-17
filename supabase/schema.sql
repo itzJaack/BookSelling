@@ -13,7 +13,7 @@ create table if not exists public."Libri" (
   editore_edizione text not null,
   materia text not null,
   prezzo_richiesto numeric(8,2) not null check (prezzo_richiesto >= 0),
-  condizioni text not null check (condizioni in ('Come Nuovo', 'Buono', 'Segnato', 'Evidenziato')),
+  condizioni text not null check (condizioni in ('Nuovo', 'Come Nuovo', 'Ottimo', 'Buono', 'Discreto', 'Segnato', 'Sottolineato', 'Evidenziato', 'Con appunti', 'Copertina usurata')),
   disponibile boolean not null default true,
   data_inserimento timestamptz not null default now()
 );

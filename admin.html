@@ -44,16 +44,17 @@
       </div>
 
       <section class="rounded-2xl border border-gray-200 bg-white">
-        <div class="border-b border-gray-200 p-5 sm:p-6"><h2 class="text-xl font-bold">Gestione inventario</h2><p class="mt-1 text-sm text-muted">Aggiungi libri e aggiorna la disponibilità.</p></div>
+        <div class="border-b border-gray-200 p-5 sm:p-6"><h2 class="text-xl font-bold">Gestione inventario</h2><p class="mt-1 text-sm text-muted">Aggiungi libri, modifica gli annunci e aggiorna la disponibilità.</p></div>
         <form id="book-form" class="grid gap-4 border-b border-gray-200 bg-gray-50/70 p-5 sm:grid-cols-2 sm:p-6 lg:grid-cols-3">
-          <label class="text-sm font-medium">ISBN<input class="admin-input" name="isbn" required maxlength="17" placeholder="978..." /></label>
-          <label class="text-sm font-medium">Titolo<input class="admin-input" name="titolo" required maxlength="180" /></label>
+          <div class="sm:col-span-2 lg:col-span-3" role="status"><h3 id="book-form-title" class="font-semibold">Aggiungi un libro</h3><p id="book-edit-notice" class="mt-1 hidden text-xs leading-5 text-muted">Modifica i dati dell’annuncio. Disponibilità, richieste e messaggi rimangono invariati.</p></div>
+          <label class="text-sm font-medium">ISBN<input class="admin-input" name="isbn" required minlength="10" maxlength="17" placeholder="978..." /></label>
+          <label class="text-sm font-medium">Titolo<input class="admin-input" name="titolo" required minlength="2" maxlength="180" /></label>
           <label class="text-sm font-medium">Editore / Edizione<input class="admin-input" name="editore_edizione" required placeholder="Zanichelli · 3ª edizione" /></label>
           <label class="text-sm font-medium">Materia<input class="admin-input" name="materia" required placeholder="Matematica" /></label>
-          <label class="text-sm font-medium">Prezzo (€)<input class="admin-input" name="prezzo_richiesto" type="number" min="0" step="0.5" required /></label>
-          <label class="text-sm font-medium">Condizioni<select class="admin-input" name="condizioni" required><option>Come Nuovo</option><option>Buono</option><option>Segnato</option><option>Evidenziato</option></select></label>
+          <label class="text-sm font-medium">Prezzo (€)<input class="admin-input" name="prezzo_richiesto" type="number" min="0" max="999999.99" step="0.01" required /></label>
+          <label class="text-sm font-medium">Condizioni<select class="admin-input" name="condizioni" required></select></label>
           <p id="book-error" class="hidden rounded-lg bg-red-50 p-3 text-sm text-red-700 sm:col-span-2 lg:col-span-3" role="alert"></p>
-          <div class="sm:col-span-2 lg:col-span-3"><button id="add-book-button" class="w-full rounded-lg bg-accent px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-60 sm:w-auto" type="submit">Aggiungi libro</button></div>
+          <div class="flex flex-wrap gap-3 sm:col-span-2 lg:col-span-3"><button id="add-book-button" class="w-full rounded-lg bg-accent px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-60 sm:w-auto" type="submit">Aggiungi libro</button><button id="cancel-book-edit" class="hidden w-full rounded-lg border border-gray-300 px-5 py-3 text-sm font-medium hover:bg-white disabled:opacity-60 sm:w-auto" type="button">Annulla modifica</button></div>
         </form>
         <div id="inventory-list" class="divide-y divide-gray-200"></div>
         <div id="inventory-empty" class="hidden p-10 text-center text-sm text-muted">Nessun libro inserito.</div>
@@ -81,6 +82,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="richieste-common.js"></script>
+  <script src="condizioni.js"></script>
   <script src="admin.js"></script>
 </body>
 </html>

@@ -10,6 +10,7 @@ Per GitHub Pages servono solo questi file/cartelle:
 - `admin.html`
 - `app.js`
 - `admin.js`
+- `condizioni.js`
 - `richiesta.html`
 - `richiesta.js`
 - `richieste-common.js`
@@ -20,6 +21,7 @@ Per GitHub Pages servono solo questi file/cartelle:
 - `README.md`
 - `supabase/schema.sql`, utile come riferimento per ricreare il database
 - `supabase/messaggi.sql`, aggiornamento per richieste e messaggi
+- `supabase/migrations/`, aggiornamenti incrementali del database
 
 Non serve fare build e non serve caricare `node_modules`. Il sito usa HTML, Tailwind via CDN, JavaScript puro e Supabase dal browser.
 
@@ -73,9 +75,17 @@ Apri `admin.html` e accedi con email e password dell'utente creato in **Supabase
 - `proprietario@example.com` nello script `supabase/schema.sql`;
 - `ownerEmail` in `supabase-config.js`.
 
-Il pannello consente di aggiungere, vendere o eliminare libri e di accettare o rifiutare offerte. L'accettazione usa la funzione SQL `gestisci_offerta`, che aggiorna offerta e disponibilità del libro nella stessa transazione.
+Il pannello consente di aggiungere, modificare, vendere o eliminare libri e di accettare o rifiutare offerte. Premi **Modifica** accanto a un libro, aggiorna i campi e premi **Salva modifiche**. **Annulla modifica** torna al modulo di inserimento senza salvare. Puoi modificare anche un libro venduto: rimane venduto finché non cambi il suo interruttore. ID, data di inserimento, richieste e messaggi vengono conservati; il prezzo delle offerte già ricevute e il titolo storico nelle ricevute non cambiano.
+
+Le condizioni disponibili sono: Nuovo, Come Nuovo, Ottimo, Buono, Discreto, Segnato, Sottolineato, Evidenziato, Con appunti e Copertina usurata. Le stesse opzioni sono disponibili nel filtro pubblico.
+
+L'accettazione usa la funzione SQL `gestisci_offerta`, che aggiorna offerta e disponibilità del libro nella stessa transazione.
 
 Dal Centro offerte puoi cercare per codice, libro o nome e aprire **Messaggi** per rispondere. Le conversazioni restano disponibili dopo l'accettazione e dopo l'eliminazione del libro dal catalogo. L'eliminazione della richiesta stessa dal database, invece, elimina anche messaggi e accesso associati.
+
+## Nuove condizioni: aggiornamento di un sito esistente
+
+In **Supabase → SQL Editor → New query**, esegui il contenuto di `supabase/migrations/20260917142344_amplia_condizioni_libri.sql` prima di pubblicare il frontend aggiornato. Lo script amplia soltanto le condizioni ammesse, senza modificare libri, richieste, messaggi o RLS. Non servono nuove chiavi. Se la migrazione è già stata applicata al tuo progetto, non occorre ripeterla. Per nuove installazioni le condizioni sono già incluse in `schema.sql`.
 
 ## Richieste e messaggi: aggiornamento di un sito esistente
 
@@ -101,7 +111,7 @@ Metodo consigliato con Git:
 
 ```bash
 git init
-git add index.html admin.html app.js admin.js richiesta.html richiesta.js richieste-common.js background.css background.js supabase-config.js supabase/schema.sql supabase/messaggi.sql README.md .nojekyll .gitignore
+git add index.html admin.html app.js admin.js condizioni.js richiesta.html richiesta.js richieste-common.js background.css background.js supabase-config.js supabase/schema.sql supabase/messaggi.sql supabase/migrations README.md .nojekyll .gitignore
 git commit -m "Deploy mercatino libri"
 git branch -M main
 git remote add origin https://github.com/TUO-USERNAME/NOME-REPO.git
@@ -132,6 +142,8 @@ Apri il sito pubblicato e controlla:
 - la ricerca filtra per ISBN, titolo e materia;
 - il bottone offerta crea una riga in `Offerte_Scambi`;
 - `admin.html` fa login con l'utente admin;
+- "Modifica" aggiorna un annuncio senza cambiarne disponibilità, richieste o messaggi;
+- tutte e dieci le condizioni possono essere salvate e filtrate nel catalogo;
 - "Accetta" segna l'offerta come accettata e il libro come venduto.
 - inviare un'offerta mostra il codice e il link privato; il link apre solo quella richiesta;
 - inviare un messaggio dall'acquirente lo rende leggibile dall'admin e viceversa, anche dopo "Accetta";
