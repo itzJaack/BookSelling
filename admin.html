@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="noindex,nofollow" />
   <title>Area amministratore — Seconda</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <meta name="theme-color" content="#ffffff" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -43,6 +46,7 @@
         <div class="rounded-xl border border-gray-200 bg-white p-5"><p class="text-sm text-muted">Offerte in attesa</p><strong id="stat-offers" class="mt-2 block text-3xl text-accent">—</strong></div>
       </div>
 
+      <div id="admin-push" class="mb-8"></div>
       <section class="rounded-2xl border border-gray-200 bg-white">
         <div class="border-b border-gray-200 p-5 sm:p-6"><h2 class="text-xl font-bold">Gestione inventario</h2><p class="mt-1 text-sm text-muted">Aggiungi libri, modifica gli annunci e aggiorna la disponibilità.</p></div>
         <form id="book-form" class="grid gap-4 border-b border-gray-200 bg-gray-50/70 p-5 sm:grid-cols-2 sm:p-6 lg:grid-cols-3">
@@ -83,6 +87,8 @@
   <script src="supabase-config.js"></script>
   <script src="richieste-common.js"></script>
   <script src="condizioni.js"></script>
+  <script src="push.js"></script>
   <script src="admin.js"></script>
+  <script src="install.js"></script>
 </body>
 </html>

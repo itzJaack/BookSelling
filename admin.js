@@ -1,4 +1,4 @@
-/* global supabase, Richieste, Conversazione, Condizioni */
+/* global supabase, Richieste, Conversazione, Condizioni, SecondaPush */
 const config = window.SUPABASE_CONFIG || {};
 const configured = config.url && config.anonKey && !config.url.includes("IL-TUO") && !config.anonKey.includes("LA-TUA");
 const db = configured ? supabase.createClient(config.url, config.anonKey) : null;
@@ -6,6 +6,7 @@ const $ = selector => document.querySelector(selector);
 let books = [], offers = [], realtimeChannel = null;
 let adminChat = null, activeOfferId = null, sessionVersion = 0;
 let editingBookId = null, savingBook = false;
+let adminPush = null;
 Condizioni.populate($("#book-form").elements.namedItem("condizioni"));
 
 function resetBookForm(){
@@ -41,9 +42,10 @@ function showError(selector,message){const el=$(selector);el.textContent=message
 async function handleSession(session){
   const email=session?.user?.email?.toLowerCase();
   const owner=(config.ownerEmail||"").toLowerCase();
-  if(!session){sessionVersion++;savingBook=false;resetBookForm();for(const input of $("#book-form").elements)input.disabled=false;closeAdminChat();books=[];offers=[];$("#inventory-list").replaceChildren();$("#offers-list").replaceChildren();if(realtimeChannel){db.removeChannel(realtimeChannel);realtimeChannel=null;}$("#login-view").classList.remove("hidden");$("#admin-view").classList.add("hidden");return;}
+  if(!session){sessionVersion++;adminPush?.close();adminPush=null;savingBook=false;resetBookForm();for(const input of $("#book-form").elements)input.disabled=false;closeAdminChat();books=[];offers=[];$("#inventory-list").replaceChildren();$("#offers-list").replaceChildren();if(realtimeChannel){db.removeChannel(realtimeChannel);realtimeChannel=null;}$("#login-view").classList.remove("hidden");$("#admin-view").classList.add("hidden");return;}
   if(!owner || owner.includes("LA-TUA") || email!==owner){await db.auth.signOut();showError("#login-error","Questo account non è autorizzato come proprietario.");return;}
   $("#login-view").classList.add("hidden");$("#admin-view").classList.remove("hidden");$("#admin-email").textContent=email;
+  if(!adminPush)adminPush=SecondaPush.mount($("#admin-push"),db,{recipient:"admin"});
   const version=sessionVersion;
   await loadAll(); if(version===sessionVersion)subscribeRealtime();
 }
@@ -152,7 +154,12 @@ $("#login-form").addEventListener("submit",async event=>{
   const {error}=await db.auth.signInWithPassword({email:$("#login-email").value.trim(),password:String(values.get("password"))});
   if(error)showError("#login-error","Email o password non corrette.");button.disabled=false;button.textContent="Accedi";
 });
-$("#logout-button").addEventListener("click",async()=>{closeAdminChat();if(realtimeChannel){await db.removeChannel(realtimeChannel);realtimeChannel=null;}await db.auth.signOut();});
+$("#logout-button").addEventListener("click",async()=>{
+  const button=$("#logout-button");button.disabled=true;
+  try{await SecondaPush.disable(db,{recipient:"admin"});closeAdminChat();if(realtimeChannel){await db.removeChannel(realtimeChannel);realtimeChannel=null;}await db.auth.signOut();}
+  catch{toast("Non riesco a disattivare le notifiche su questo dispositivo. Controlla la connessione e riprova a uscire.");}
+  finally{button.disabled=false;}
+});
 $("#cancel-book-edit").addEventListener("click",()=>{if(!savingBook)resetBookForm();});
 $("#book-form").addEventListener("submit",async event=>{
   event.preventDefault();if(savingBook)return;
@@ -178,5 +185,7 @@ $("#book-form").addEventListener("submit",async event=>{
 
 function subscribeRealtime(){if(realtimeChannel)return;realtimeChannel=db.channel("admin-live").on("postgres_changes",{event:"*",schema:"public",table:"Libri"},loadAll).on("postgres_changes",{event:"*",schema:"public",table:"Offerte_Scambi"},loadAll).on("postgres_changes",{event:"INSERT",schema:"public",table:"Messaggi_Richieste"},payload=>{if(activeOfferId===payload.new.offerta_id)adminChat?.refresh();else if(payload.new.autore==="Acquirente"){const offer=offers.find(item=>item.id===payload.new.offerta_id);toast(`Nuovo messaggio · ${offer?.codice_richiesta||"richiesta"}`);}}).subscribe();}
 
+const notificationCode=new URLSearchParams(location.search).get("richiesta");
+if(/^SEC-[A-F0-9]{12}$/.test(notificationCode||""))$("#offer-search").value=notificationCode;
 if(!configured)showError("#login-error","Inserisci URL, Anon Key ed email proprietario in supabase-config.js.");
 else {$("#login-email").value=config.ownerEmail&&!config.ownerEmail.includes("LA-TUA")?config.ownerEmail:"";db.auth.onAuthStateChange((_event,session)=>setTimeout(()=>handleSession(session),0));db.auth.getSession().then(({data})=>handleSession(data.session));}

@@ -11,6 +11,7 @@ Per GitHub Pages servono solo questi file/cartelle:
 - `app.js`
 - `admin.js`
 - `condizioni.js`
+- `push.js`, `sw.js`, `install.js`, `manifest.webmanifest` e `icons/`, per installazione e notifiche sul telefono
 - `richiesta.html`
 - `richiesta.js`
 - `richieste-common.js`
@@ -22,6 +23,7 @@ Per GitHub Pages servono solo questi file/cartelle:
 - `supabase/schema.sql`, utile come riferimento per ricreare il database
 - `supabase/messaggi.sql`, aggiornamento per richieste e messaggi
 - `supabase/migrations/`, aggiornamenti incrementali del database
+- `supabase/functions/push-notifications/`, sorgente della funzione da distribuire su Supabase (non viene eseguita da GitHub Pages)
 
 Non serve fare build e non serve caricare `node_modules`. Il sito usa HTML, Tailwind via CDN, JavaScript puro e Supabase dal browser.
 
@@ -107,11 +109,42 @@ Le funzioni pubbliche controllano sempre la chiave privata, usano un `search_pat
 
 ## 5. Pubblica su GitHub Pages
 
+### Notifiche push sul telefono (senza email)
+
+Il sistema invia all'admin gli avvisi per nuove offerte e messaggi degli acquirenti; invia al compratore gli avvisi per le risposte del venditore alla propria richiesta. Non invia email né SMS e non richiede account presso servizi di notifiche esterni.
+
+**Sul telefono:**
+
+Il sito propone automaticamente un piccolo invito **Aggiungi Seconda alla Home** su Android e iPhone/iPad. Su Android il pulsante apre la richiesta nativa quando il browser la rende disponibile; altrimenti mostra le istruzioni dal menu. Su iPhone non esiste un prompt JavaScript nativo: viene mostrata la guida per Safari. **Non ora** nasconde l'invito per sette giorni; il collegamento in fondo alla pagina resta disponibile. Nell'app aperta dalla Home l'invito non compare. L'installazione non concede automaticamente il permesso alle notifiche: occorre premere anche **Attiva notifiche**.
+
+- **Admin:** apri `admin.html`, accedi e premi **Attiva notifiche**. Consenti le notifiche quando lo chiede il browser.
+- **Compratore:** apri il link privato della richiesta, poi premi **Attiva notifiche** nella conversazione. L'attivazione vale per quella richiesta su quel dispositivo.
+- **iPhone/iPad:** richiede iOS/iPadOS 16.4 o successivo. Apri il sito in Safari, scegli **Condividi → Aggiungi alla schermata Home**, quindi aprilo dall'icona e attiva le notifiche. Se le richieste salvate nel browser non compaiono nell'app, incolla nuovamente il link privato originale. Non perderlo durante l'installazione.
+- **Android:** usa un browser aggiornato che supporti Web Push (per esempio Chrome) e consenti le notifiche. Puoi aggiungere il sito alla schermata Home; non è obbligatorio per Chrome.
+- Premi **Invia una prova** e attendi circa un minuto. Una prova al minuto per dispositivo; la coda ritenta gli errori temporanei. Rete, modalità Non disturbare, risparmio energetico e impostazioni del sistema possono ritardare o impedire gli avvisi: controlla anche la conversazione.
+- **Disattiva notifiche** rimuove solo l'iscrizione dell'area/richiesta corrente. Uscire dall'account admin disattiva gli avvisi admin su quel browser; rimuovere una richiesta salvata disattiva i suoi avvisi. Le altre richieste sullo stesso dispositivo restano attive. Se una di queste operazioni fallisce per problemi di rete, il sito lo segnala senza cancellare l'accesso locale.
+
+**Configurazione server per una nuova installazione:**
+
+1. Esegui prima `schema.sql` e `messaggi.sql`. Apri `supabase/migrations/20260917161413_notifiche_push.sql`: imposta `admin_email` (stessa email dell'admin), `site_url` (URL Pages con `/` finale) e `function_url` (URL del progetto Supabase + `/functions/v1/push-notifications`). Esegui la migrazione una sola volta. Le chiavi sono generate sul server; non copiarle in `supabase-config.js`.
+2. Distribuisci la funzione nella cartella `supabase/functions/push-notifications` con nome **push-notifications**, includendo `deno.json` e `deno.lock`. La verifica JWT del gateway va disabilitata per questa funzione: il codice verifica autonomamente il JWT dell'admin, la chiave privata dell'acquirente oppure il segreto del processo di invio. Non disabilitarla su altre funzioni.
+3. Il primo accesso alla funzione genera la coppia VAPID. La chiave privata e il segreto del processo di invio sono conservati in **Supabase Vault**; al browser viene restituita solo la chiave pubblica. Non rigenerare/eliminare questi segreti: le iscrizioni esistenti smetterebbero di funzionare.
+4. La migrazione attiva il processo Cron **seconda-push-delivery**, ogni minuto. Gli eventi inseriscono notifiche in una coda transazionale; il processo chiama la funzione solo se ci sono invii da elaborare. Non dipende da pagine aperte. Si applicano le normali quote Supabase di funzioni e database.
+5. Pubblica `push.js`, `sw.js`, `install.js`, `manifest.webmanifest`, `icons/` e le pagine aggiornate su Pages. Lascia il service worker nella stessa cartella delle pagine: il percorso funziona anche sotto `/BookSelling/`.
+
+Nel progetto esistente la migrazione è già applicata e la funzione è distribuita: occorre soltanto attivare gli avvisi sul dispositivo. La migrazione `20260917162530_push_extension_schema.sql` corregge l'installazione iniziale di `pg_net`; su una nuova installazione corretta non modifica nulla. Non rieseguire la migrazione principale su tabelle già presenti.
+
+**Sicurezza e limiti:** le nuove tabelle `push_settings`, `push_subscriptions` e `push_jobs` hanno RLS e nessun accesso dal browser; solo la funzione server può accedervi. L'assenza di policy client su queste tabelle è intenzionale ([documentazione del controllo RLS](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)). Le funzioni di coda e configurazione sono riservate a `service_role`. Il codice della richiesta da solo non permette di attivare notifiche. Rigenerare il link privato revoca anche le vecchie iscrizioni del compratore. Le notifiche mostrano soltanto un avviso generico, mai contatti, testo dei messaggi o chiavi private. Aprirle richiede comunque la sessione admin o il link salvato dell'acquirente.
+
+Gli invii scadono dopo un'ora presso il servizio push; gli errori temporanei vengono ritentati fino a cinque volte, gli endpoint scaduti vengono rimossi e la coda viene ripulita dopo sette giorni. In rari retry un avviso può essere ripresentato, con lo stesso identificativo per limitarne i duplicati. Il service worker non memorizza pagine o conversazioni offline. La ricezione sul telefono va verificata con il pulsante di prova: un invio accettato dal servizio push non garantisce che il sistema mostri immediatamente l'avviso.
+
+Riferimenti: [Supabase: funzioni pianificate](https://supabase.com/docs/guides/functions/schedule-functions), [Apple: Web Push su iPhone/iPad](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/).
+
 Metodo consigliato con Git:
 
 ```bash
 git init
-git add index.html admin.html app.js admin.js condizioni.js richiesta.html richiesta.js richieste-common.js background.css background.js supabase-config.js supabase/schema.sql supabase/messaggi.sql supabase/migrations README.md .nojekyll .gitignore
+git add index.html admin.html app.js admin.js condizioni.js richiesta.html richiesta.js richieste-common.js push.js sw.js install.js manifest.webmanifest icons background.css background.js supabase-config.js supabase/schema.sql supabase/messaggi.sql supabase/migrations supabase/functions README.md .nojekyll .gitignore
 git commit -m "Deploy mercatino libri"
 git branch -M main
 git remote add origin https://github.com/TUO-USERNAME/NOME-REPO.git
